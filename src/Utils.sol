@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: WTFPL.ETH
 pragma solidity >0.8.0 <0.9.0;
 
+import "./Interface.sol";
+
 library Utils {
     bytes16 internal constant b16 = "0123456789abcdef";
     bytes16 internal constant B16 = "0123456789ABCDEF";
     string internal constant B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    iENS public constant ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
+    function isAddr(bytes memory _addr)  internal pure returns (bool) {
+        return (_addr.length == 42 && _addr[0] == bytes1("0") && _addr[1] == bytes1("x"));
+    }
+
+    function isENS(bytes memory _eth) internal view returns (bool) {
+        
+    }
     function encodeLen(uint256 length) internal pure returns (bytes memory) {
         return (length < 128)
             ? abi.encodePacked(uint8(length))
@@ -20,37 +30,38 @@ library Utils {
         return bytes.concat(hex"e30101800400", encodeLen(bytes(_json).length), bytes(_json));
     }
 
-    function encodeBase64(bytes memory data) internal pure returns (string memory result) {
-        /// @dev Lookup :
-        // https://github.com/Brechtpd/base64/blob/e78d9fd951e7b0977ddca77d92dc85183770daf4/base64.sol
-        // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Base64.sol
-        if (data.length == 0) return "";
-        string memory table = B64;
-        result = new string(4 * ((data.length + 2) / 3));
-        assembly {
-            let tablePtr := add(table, 1)
-            let resultPtr := add(result, 32)
-            for {
-                let dataPtr := data
-                let endPtr := add(data, mload(data))
-            } lt(dataPtr, endPtr) {} {
-                dataPtr := add(dataPtr, 3)
-                let input := mload(dataPtr)
-                mstore8(resultPtr, mload(add(tablePtr, and(shr(18, input), 0x3F))))
-                resultPtr := add(resultPtr, 1)
-                mstore8(resultPtr, mload(add(tablePtr, and(shr(12, input), 0x3F))))
-                resultPtr := add(resultPtr, 1)
-                mstore8(resultPtr, mload(add(tablePtr, and(shr(6, input), 0x3F))))
-                resultPtr := add(resultPtr, 1)
-                mstore8(resultPtr, mload(add(tablePtr, and(input, 0x3F))))
-                resultPtr := add(resultPtr, 1)
+    function checkInterface(address _contract, bytes4 _interface) internal view returns (bool) {
+        try iERC165(_contract).supportsInterface{gas: 66666}(_interface) returns (bool ok) {
+            return ok;
+        } catch {
+            return false;
+        }
+    }
+
+    function checkENSAddr(bytes[] memory _labels) internal view returns (address _addr, string memory _error) {
+        uint len = _labels .length;
+        bytes32 _node = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--len])));
+        bytes memory _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], hex"00");
+        address _resolver;
+        while (len > 0){
+            _node = keccak256(abi.encodePacked(_node, keccak256(_labels[--len])));
+            _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], _name);
+            if(ENS.resolver(_node) != address(0)){
+                _resolver = ENS.resolver(_node);
             }
-            switch mod(mload(data), 3)
-            case 1 {
-                mstore8(sub(resultPtr, 1), 0x3d)
-                mstore8(sub(resultPtr, 2), 0x3d)
+        }
+        if (checkInterface(_resolver, iResolver.addr.selector)) {
+            _addr = iResolver(_resolver).addr(_node);
+        } else if(checkInterface(_resolver, iENSIP10.resolve.selector)){
+            try iENSIP10(_resolver).resolve(_name, abi.encodeWithSelector(iResolver.addr.selector, _node)) returns (bytes memory _data) {
+                _addr = abi.decode(_data, (address));
+            } catch (bytes memory _lookup) {
+                //error OffchainLookup(address _to, string[] _gateways, bytes _data, bytes4 _callbackFunction, bytes _extradata);
+                //iNotAPI(address(this)).formatLookup(_lookup);
+                //return false;
             }
-            case 2 { mstore8(sub(resultPtr, 1), 0x3d) }
+        } else {
+            _error = "ERC20: Invalid ENS Setup";
         }
     }
 
@@ -119,7 +130,7 @@ library Utils {
     }
 
     function stringToAddress(bytes memory _addr) internal pure returns (address) {
-        require(_addr.length == 42 && _addr[1] == bytes1("x") && _addr[0] == bytes1("0"), "Invalid Address Format");
+        //require(_addr.length == 42 && _addr[1] == bytes1("x") && _addr[0] == bytes1("0"), "Invalid Address Format");
         return address(uint160(uint256(bytes32(hexStringToBytes(_addr)) >> 96)));
     }
 

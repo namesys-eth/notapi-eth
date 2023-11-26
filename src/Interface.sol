@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: WTFPL.ETH
 pragma solidity >0.8.0 <0.9.0;
-
+interface iNotAPI{
+    function formatLookup(bytes calldata _data) external pure returns(bytes memory);
+}
 interface iERC165 {
     function supportsInterface(bytes4 interfaceID) external view returns (bool);
 }
@@ -53,16 +55,30 @@ interface iERC20 {
 
     function balanceOf(address _owner) external view returns (uint256 balance);
     function allowance(address _owner, address _spender) external view returns (uint256 remaining);
+
+    function transfer(address to, uint256 _balance) external;
 }
 
 interface iERC721 {
     function balanceOf(address _owner) external view returns (uint256);
-    function ownerOf(uint256 _tokenId) external view returns (address);
-    function getApproved(uint256 _tokenId) external view returns (address);
+    function ownerOf(uint256 _id) external view returns (address);
+    function getApproved(uint256 _id) external view returns (address);
     function isApprovedForAll(address _owner, address _operator) external view returns (bool);
 
     function name() external view returns (string memory _name);
     function symbol() external view returns (string memory _symbol);
-    function tokenURI(uint256 _tokenId) external view returns (string memory);
+    function tokenURI(uint256 _id) external view returns (string memory);
+    function totalSupply() external view returns (uint256);
+}
+
+interface iERC1155 {
+    function balanceOf(address _owner, uint256 _id) external view returns (uint256);
+    function ownerOf(uint256 _id) external view returns (address);
+    function uri(uint256 _id) external view returns (string memory);
+
+    function getApproved(uint256 _id) external view returns (address);
+    function isApprovedForAll(address _owner, address _operator) external view returns (bool);
+
+    function totalSupply(uint256 id) external view returns (uint256);
     function totalSupply() external view returns (uint256);
 }
