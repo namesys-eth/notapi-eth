@@ -9,13 +9,12 @@ library Utils {
     string internal constant B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     iENS public constant ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
-    function isAddr(bytes memory _addr)  internal pure returns (bool) {
+    function isAddr(bytes memory _addr) internal pure returns (bool) {
         return (_addr.length == 42 && _addr[0] == bytes1("0") && _addr[1] == bytes1("x"));
     }
 
-    function isENS(bytes memory _eth) internal view returns (bool) {
-        
-    }
+    function isENS(bytes memory _eth) internal view returns (bool) {}
+
     function encodeLen(uint256 length) internal pure returns (bytes memory) {
         return (length < 128)
             ? abi.encodePacked(uint8(length))
@@ -31,29 +30,47 @@ library Utils {
     }
 
     function checkInterface(address _contract, bytes4 _interface) internal view returns (bool) {
-        try iERC165(_contract).supportsInterface{gas: 66666}(_interface) returns (bool ok) {
+        try iERC165(_contract).supportsInterface{gas: 99999}(_interface) returns (bool ok) {
             return ok;
         } catch {
             return false;
         }
     }
 
+    function checkSupply(address _addr) internal view returns (uint256) {
+        try iERC721(_addr).totalSupply{gas: 99999}() returns (uint256 _supply) {
+            return _supply;
+        } catch {
+            return 0;
+        }
+    }
+
+    function checkSupplyOf(address _addr, uint256 _id) internal view returns (uint256) {
+        try iERC1155(_addr).totalSupply{gas: 99999}(_id) returns (uint256 _supply) {
+            return _supply;
+        } catch {
+            return 0;
+        }
+    }
+    /*
     function checkENSAddr(bytes[] memory _labels) internal view returns (address _addr, string memory _error) {
-        uint len = _labels .length;
+        uint256 len = _labels.length;
         bytes32 _node = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--len])));
         bytes memory _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], hex"00");
         address _resolver;
-        while (len > 0){
+        while (len > 0) {
             _node = keccak256(abi.encodePacked(_node, keccak256(_labels[--len])));
             _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], _name);
-            if(ENS.resolver(_node) != address(0)){
+            if (ENS.resolver(_node) != address(0)) {
                 _resolver = ENS.resolver(_node);
             }
         }
         if (checkInterface(_resolver, iResolver.addr.selector)) {
             _addr = iResolver(_resolver).addr(_node);
-        } else if(checkInterface(_resolver, iENSIP10.resolve.selector)){
-            try iENSIP10(_resolver).resolve(_name, abi.encodeWithSelector(iResolver.addr.selector, _node)) returns (bytes memory _data) {
+        } else if (checkInterface(_resolver, iENSIP10.resolve.selector)) {
+            try iENSIP10(_resolver).resolve(_name, abi.encodeWithSelector(iResolver.addr.selector, _node)) returns (
+                bytes memory _data
+            ) {
                 _addr = abi.decode(_data, (address));
             } catch (bytes memory _lookup) {
                 //error OffchainLookup(address _to, string[] _gateways, bytes _data, bytes4 _callbackFunction, bytes _extradata);
@@ -64,6 +81,7 @@ library Utils {
             _error = "ERC20: Invalid ENS Setup";
         }
     }
+    */
 
     function log10(uint256 value) internal pure returns (uint256 result) {
         unchecked {

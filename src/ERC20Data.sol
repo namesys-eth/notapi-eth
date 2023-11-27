@@ -7,14 +7,6 @@ import "./Utils.sol";
 library ERC20Data {
     using Utils for *;
 
-    function checkSupply(iERC20 erc20) internal view returns (uint256) {
-        try erc20.totalSupply{gas: 99999}() returns (uint256 _supply) {
-            return _supply;
-        } catch {
-            return 0;
-        }
-    }
-
     function getInfo(iERC20 erc20) internal view returns (bytes memory) {
         return string.concat(
             '{"name":"',
@@ -45,7 +37,7 @@ library ERC20Data {
             (erc20.totalSupply()).uintToString(),
             '","decimal":"',
             (erc20.decimals()).uintToString(),
-            '","address":"',
+            '","owner":"',
             (_addr).toChecksumAddress(),
             '","timestamp":"',
             (block.timestamp).uintToString(),

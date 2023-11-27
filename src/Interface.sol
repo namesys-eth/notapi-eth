@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: WTFPL.ETH
 pragma solidity >0.8.0 <0.9.0;
-interface iNotAPI{
-    function formatLookup(bytes calldata _data) external pure returns(bytes memory);
+
+interface iNotAPI {
+    function CCIPLookup(bytes4 _selector, address _contract, bytes calldata _lookup)
+        external
+        view
+        returns (bytes memory output);
+    //function isCCIP(bytes calldata _lookup) external pure returns (bool);
+    function __callback1(bytes calldata _result, bytes calldata _extradata)
+        external
+        view
+        returns (bytes memory _output);
 }
+
 interface iERC165 {
     function supportsInterface(bytes4 interfaceID) external view returns (bool);
 }

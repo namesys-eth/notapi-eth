@@ -7,15 +7,7 @@ import "./Utils.sol";
 library TokenData {
     using Utils for *;
 
-    function checkSupply(iERC721 erc721) internal view returns (uint256) {
-        try erc721.totalSupply{gas: 99999}() returns (uint256 _supply) {
-            return _supply;
-        } catch {
-            return 0;
-        }
-    }
-
-    function _info(iERC721 erc721) internal view returns (bytes memory) {
+    function getInfo(iERC721 erc721) internal view returns (bytes memory) {
         return string.concat(
             '{"name":"',
             erc721.name(),
@@ -24,24 +16,20 @@ library TokenData {
             '","symbol":"',
             erc721.symbol(),
             '","totalsupply":"',
-            (erc721.totalSupply()).uintToString(),
-            //'","decimal":"',
-            //(erc721.decimals()).uintToString(),
+            (address(erc721).checkSupply()).uintToString(),
             '","timestamp":"',
             (block.timestamp).uintToString(),
             '"}'
         ).toJSON();
-        //'","block":"',
-        //(block.number).uintToString(),
     }
 
-    function _balance(iERC721 erc721, address _addr) internal view returns (bytes memory) {
+    function getBalance(iERC721 erc721, address _addr) internal view returns (bytes memory) {
         return string.concat(
             '{"balance":"',
             (erc721.balanceOf(_addr)).uintToString(),
             '","totalsupply":"',
-            (erc721.totalSupply()).uintToString(),
-            '","address":"',
+            (address(erc721).checkSupply()).uintToString(),
+            '","owner":"',
             (_addr).toChecksumAddress(),
             '","timestamp":"',
             (block.timestamp).uintToString(),
@@ -49,14 +37,28 @@ library TokenData {
         ).toJSON();
     }
 
-    function _approvedForAll(iERC721 erc721, address _owner, address _spender) internal view returns (bytes memory) {
+    function getApprovedForAll(iERC721 erc721, address _owner, address _spender) internal view returns (bytes memory) {
         return string.concat(
-            '{"approved":"',
+            '{"approvedAll":"',
             (erc721.isApprovedForAll(_owner, _spender)) ? "true" : "false",
             '","owner":"',
             (_owner).toChecksumAddress(),
             '","spender":"',
             (_spender).toChecksumAddress(),
+            '","timestamp":"',
+            (block.timestamp).uintToString(),
+            '"}'
+        ).toJSON();
+    }
+
+    function getApprovedId(iERC721 erc721, uint256 _id) internal view returns (bytes memory) {
+        return string.concat(
+            '{"approved":"',
+            (erc721.getApproved(_id)).toChecksumAddress(),
+            '","owner":"',
+            (erc721.ownerOf(_id)).toChecksumAddress(),
+            '","id":"',
+            (_id).uintToString(),
             '","timestamp":"',
             (block.timestamp).uintToString(),
             '"}'
