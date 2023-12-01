@@ -20,7 +20,7 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
     mapping(bytes32 => bytes4) public FunctionMap;
 
     constructor() {
-        TokenMap[bytes32(bytes("dai"))] = address(0); //set DAI token address here
+        TokenMap[bytes32(bytes("dai"))] = address(0x6B175474E89094C44Da98b954EedeAC495271d0F); //set DAI token address here
         TokenMap[bytes32(bytes("weth"))] = address(0); //set WETH token address here
         TokenMap[bytes32(bytes("usdc"))] = address(0); //set USDC token address here
         TokenMap[bytes32(bytes("ens"))] = address(0); //set ENS token address here
@@ -47,16 +47,23 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
 
     error CallbackFailed(bytes);
 
-    function __callback1(bytes calldata _result, bytes calldata _extra) external view returns (bytes memory) {
-        (address _resolver, address _token, bytes memory _extradata) = abi.decode(_extra[8:], (address, address, bytes));
+    function __callbackERC20(bytes calldata _result, bytes calldata _extra) external view returns (bytes memory) {
+        (address _resolver, address _token, address _allowed, bytes memory _extradata) =
+            abi.decode(_extra[4:], (address, address, address, bytes));
         function(bytes memory, bytes memory) external view returns(address) getAddr;
         uint32 _sel = uint32(bytes4(_extra[:4]));
         assembly {
             getAddr.selector := _sel
             getAddr.address := _resolver
         }
-        try getAddr(_result, _extradata) returns (address _owner) {
-            return iERC20(_token).getBalance(_owner);
+        try getAddr(_result, _extradata) returns (address _addr) {
+            //bytes4 _switch = bytes4(_extra[4:8]);
+            if (_allowed == address(0)) {
+                return iERC20(_token).getBalance(_addr);
+            } else if (_allowed != address(0)) {
+                return iERC20(_token).getAllowance(_addr, _allowed);
+            }
+            return "ERC20: Not Supported Function".toError();
         } catch Error(string memory err) {
             return string.concat("ERC20-CCIP:", err).toError();
         } catch Panic(uint256 errCode) {
@@ -83,7 +90,7 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
                 // not recursive
                 revert CallbackFailed(_lookup);
                 // will revert as CCIP lookup
-                //return iNotAPI(this).CCIPLookup(_lookup, _extra);
+                //return iNotAPI(this).lookupERC20(_lookup, _extra);
             }
             (bool ok, bytes memory _out) = _resolver.staticcall(abi.encodePacked(bytes4(_extra[:4]), _res, _orgExtra));
             if (!ok) {
@@ -107,14 +114,14 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
                 return string.concat("CCIP:Panic ", errCode.uintToString()).toError();
             } catch (bytes memory _lookup) {
                 // will revert as CCIP lookup
-                //return iNotAPI(this).CCIPLookup(_lookup, _extra);
+                //return iNotAPI(this).lookupERC20(_lookup, _extra);
             }
         */
     }
 
     function __callback2(bytes calldata _res, bytes calldata _extra) external view returns (bytes memory _output) {}
 
-    function CCIPLookup(bytes4 _selector, address _contract, bytes calldata _lookup)
+    function lookupERC20(address _contract, address _allowed, bytes calldata _lookup)
         external
         view
         returns (bytes memory output)
@@ -123,10 +130,10 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
         if (bytes4(_lookup[:4]) != iENSIP10.OffchainLookup.selector) {
             return "ERC20:Invalid CCIP Data".toError();
         }
-        (address _to, string[] memory _gateways, bytes memory _data, bytes4 _callbackFunction, bytes memory _extra) =
+        (address _to, string[] memory _gateways, bytes memory _data, bytes4 _orgCallback, bytes memory _extra) =
             abi.decode(_lookup[4:], (address, string[], bytes, bytes4, bytes));
-        _extra = abi.encodePacked(_callbackFunction, _selector, abi.encode(_contract, _to, _extra));
-        revert iENSIP10.OffchainLookup(address(this), _gateways, _data, iNotAPI.__callback1.selector, _extra);
+        _extra = abi.encodePacked(_orgCallback, abi.encode(_contract, _to, _allowed, _extra));
+        revert iENSIP10.OffchainLookup(address(this), _gateways, _data, iNotAPI.__callbackERC20.selector, _extra);
     }
 
     function resolve(bytes calldata name, bytes calldata request) external view returns (bytes memory output) {
@@ -160,9 +167,9 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
             } else if (address(erc20).checkSupply() == 0) {
                 return "ERC20:Zero Supply".toError();
             }
-            _type = bytes32(_labels[2]);
-            if (FunctionMap[bytes32(_labels[2])] == 0x0) {
-                return "ERC20:Invalid Function".toError();
+            if (level == 4) {
+                // erc20.dai.notapi.eth
+                return erc20.getInfo();
             }
             bytes4 _fun = FunctionMap[bytes32(_labels[2])];
             if (_fun == iERC20.balanceOf.selector) {
@@ -203,29 +210,35 @@ contract NotAPI is iERC173, iERC165, iNotAPI {
                             return string.concat("ERC20:Panic ", errCode.uintToString()).toError();
                         } catch (bytes memory _lookup) {
                             // will revert as CCIP lookup
-                            return iNotAPI(this).CCIPLookup(iERC20.balanceOf.selector, address(erc20), _lookup);
+                            return iNotAPI(this).lookupERC20(address(erc20), address(0), _lookup);
                         }
                     } else {
-                        "ERC20:Invalid ENS Domain".toError();
+                        "ERC20:Invalid ENS Resolver".toError();
                     }
-                } else {
-                    return "ERC20:Invalid Owner".toError();
                 }
                 if (_owner == address(0)) {
-                    return "ERC20:Owner Address Not Set".toError();
+                    return "ERC20:Invalid Owner Address".toError();
                 }
                 return erc20.getBalance(_owner);
             } else if (_fun == iERC20.allowance.selector) {
+                if (!_labels[level - 3].isAddr()) {
+                    //erc20.dai.allowance.<addr/domain..>.<address>.notapi.eth
+                    return "ERC20:Invalid Spender Address".toError();
+                }
                 if (!_labels[3].isAddr()) {
                     return "ERC20:Invalid Owner".toError();
                 }
-                if (!_labels[4].isAddr()) {
-                    return "ERC20:Invalid Spender".toError();
-                }
                 return erc20.getAllowance(_labels[3].stringToAddress(), _labels[4].stringToAddress());
+            } else if (
+                _fun == iERC20.totalSupply.selector || _fun == iERC20.name.selector || _fun == iERC20.decimals.selector
+                    || _fun == iERC20.symbol.selector
+            ) {
+                return erc20.getInfo();
             }
-            return erc20.getInfo();
-        }
+            return "ERC20:Invalid Request".toError();
+        } else if (
+            _type == bytes32(bytes("nft")) || _type == bytes32(bytes("erc721")) || _type == bytes32(bytes("erc1155"))
+        ) {}
     }
 
     /// @dev : utils functions

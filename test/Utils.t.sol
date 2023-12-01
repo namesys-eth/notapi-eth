@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: WTFPL.ETH
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
@@ -7,8 +7,11 @@ import {Utils} from "../src/Utils.sol";
 contract UtilsTest is Test {
     using Utils for *;
 
-    function testBase64() public {
-        //assertEq(string("SGVsbG8gV29ybGQ="), bytes("Hello World").encodeBase64());
+    function testErrorJson() public {
+        assertEq(
+            "Hello World".toError(),
+            hex"e30101800400437b226572726f72223a2248656c6c6f20576f726c64222c2274696d657374616d70223a2231373031343531323233222c22626c6f636b223a223138363933303134227d"
+        );
     }
 
     function testHexStringToBytes() public {

@@ -153,20 +153,23 @@ library Utils {
     }
 
     function toChecksumAddress(address _addr) internal pure returns (string memory) {
+        if (_addr == address(0)) {
+            return "0x0000000000000000000000000000000000000000";
+        }
+        bytes memory _buffer = abi.encodePacked(_addr);
+        bytes memory result = new bytes(40);
+        bytes32 hash = keccak256(abi.encodePacked(bytesToHexString(_buffer)));
+        uint256 d;
+        uint256 r;
         unchecked {
-            bytes memory _buffer = abi.encodePacked(_addr);
-            bytes memory result = new bytes(40);
-            bytes32 hash = keccak256(abi.encodePacked(bytesToHexString(_buffer)));
-            uint256 d;
-            uint256 r;
-            for (uint256 i; i < 20; i++) {
+            for (uint256 i = 0; i < 20; i++) {
                 d = uint8(_buffer[i]) / 16;
                 r = uint8(_buffer[i]) % 16;
                 result[i * 2] = uint8(hash[i]) / 16 > 7 ? B16[d] : b16[d];
                 result[i * 2 + 1] = uint8(hash[i]) % 16 > 7 ? B16[r] : b16[r];
             }
-            return string.concat("0x", string(result));
         }
+        return string.concat("0x", string(result));
     }
 
     function uintToString(uint256 value) internal pure returns (string memory) {

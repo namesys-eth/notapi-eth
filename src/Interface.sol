@@ -2,12 +2,12 @@
 pragma solidity >0.8.0 <0.9.0;
 
 interface iNotAPI {
-    function CCIPLookup(bytes4 _selector, address _contract, bytes calldata _lookup)
+    function lookupERC20(address _contract, address _allowed, bytes calldata _lookup)
         external
         view
         returns (bytes memory output);
     //function isCCIP(bytes calldata _lookup) external pure returns (bool);
-    function __callback1(bytes calldata _result, bytes calldata _extradata)
+    function __callbackERC20(bytes calldata _result, bytes calldata _extradata)
         external
         view
         returns (bytes memory _output);

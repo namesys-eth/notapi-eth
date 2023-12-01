@@ -11,6 +11,8 @@ library ENSData {
         return string.concat(
             '{"name":"',
             _name,
+            '","namehash":"',
+            abi.encodePacked(_node).bytesToHexString(),
             '","resolver":"',
             address(ens.resolver(_node)).toChecksumAddress(),
             '","manager":"',
