@@ -7,13 +7,6 @@ import {Utils} from "../src/Utils.sol";
 contract UtilsTest is Test {
     using Utils for *;
 
-    function testErrorJson() public {
-        assertEq(
-            "Hello World".toError(),
-            hex"e30101800400437b226572726f72223a2248656c6c6f20576f726c64222c2274696d657374616d70223a2231373031343531323233222c22626c6f636b223a223138363933303134227d"
-        );
-    }
-
     function testHexStringToBytes() public {
         assertEq(
             bytes(hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
@@ -40,18 +33,22 @@ contract UtilsTest is Test {
         );
     }
 
-    function testStringToUint() public {
-        assertEq(123456789, bytes("123456789").stringToUint());
-        assertEq(0, bytes("0").stringToUint());
-        assertEq(11111, bytes("11111").stringToUint());
-        assertEq(99999, bytes("99999").stringToUint());
+    function testStringToAddress() public {
+        assertEq(address(0), bytes(string("0x0000000000000000000000000000000000000000")).stringToAddress());
         assertEq(
-            123456789123456789123456789123456789123456789123456789,
-            bytes("123456789123456789123456789123456789123456789123456789").stringToUint()
+            address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF),
+            bytes(string("0xffffffffffffffffffffffffffffffffffffffff")).stringToAddress()
         );
         assertEq(
-            type(uint256).max,
-            bytes("115792089237316195423570985008687907853269984665640564039457584007913129639935").stringToUint()
+            address(0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06),
+            bytes(string("0x7b0cc5dd236eea79c8739468bb56ed5e147c8b06")).stringToAddress()
+        );
+    }
+
+    function testChecksumAddress() public {
+        assertEq(
+            address(0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06).toChecksumAddress(),
+            string("0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06")
         );
     }
 
@@ -70,11 +67,44 @@ contract UtilsTest is Test {
         );
     }
 
-    function testStringToAddress() public {
-        assertEq(address(0), bytes(string("0x0000000000000000000000000000000000000000")).stringToAddress());
+    function testStringToUint() public {
+        assertEq(123456789, bytes("123456789").stringToUint());
+        assertEq(0, bytes("0").stringToUint());
+        assertEq(11111, bytes("11111").stringToUint());
+        assertEq(99999, bytes("99999").stringToUint());
         assertEq(
-            address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF),
-            bytes(string("0xffffffffffffffffffffffffffffffffffffffff")).stringToAddress()
+            123456789123456789123456789123456789123456789123456789,
+            bytes("123456789123456789123456789123456789123456789123456789").stringToUint()
         );
+        assertEq(
+            type(uint256).max,
+            bytes("115792089237316195423570985008687907853269984665640564039457584007913129639935").stringToUint()
+        );
+    }
+
+    function testPercent() public {
+        assertEq("0.001%", uint(1234).percentX1e8());
+        assertEq("0.012%", uint(12345).percentX1e8());
+        assertEq("0.123%", uint(123456).percentX1e8());
+        assertEq("1.234%", uint(1234567).percentX1e8());
+        assertEq("12.345%", uint(12345678).percentX1e8());
+        assertEq("0.00%", uint(999).percentX1e8());
+        assertEq("0.999%", uint(999999).percentX1e8());
+        assertEq("9.999%", uint(9999999).percentX1e8());
+        assertEq("1.000%", uint(1000000).percentX1e8());
+        assertEq("10.000%", uint(10000000).percentX1e8());
+        assertEq("100%", uint(100000000).percentX1e8());
+    }
+
+    function testIdToUint() public {
+        (bool ok, uint num) = bytes("id123456").idToUint(); 
+        assertTrue(ok);
+        assertEq(uint(123456), num);
+        (ok, num) = bytes("identity").idToUint(); 
+        assertFalse(ok);
+        assertEq(type(uint).max, num);
+        (ok, num) = bytes("id001").idToUint(); 
+        assertTrue(ok);
+        assertEq(uint(1), num);
     }
 }

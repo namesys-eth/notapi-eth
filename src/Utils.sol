@@ -2,86 +2,117 @@
 pragma solidity >0.8.0 <0.9.0;
 
 import "./Interface.sol";
+import "./CIDv1.sol";
+
+//ERC1155 = 0Sxd9b67a26 | ERC721 = 0x80ac58cd
 
 library Utils {
     bytes16 internal constant b16 = "0123456789abcdef";
     bytes16 internal constant B16 = "0123456789ABCDEF";
-    string internal constant B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    iENS public constant ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
-
-    function isAddr(bytes memory _addr) internal pure returns (bool) {
-        return (_addr.length == 42 && _addr[0] == bytes1("0") && _addr[1] == bytes1("x"));
-    }
-
-    function isENS(bytes memory _eth) internal view returns (bool) {}
-
-    function encodeLen(uint256 length) internal pure returns (bytes memory) {
-        return (length < 128)
-            ? abi.encodePacked(uint8(length))
-            : bytes.concat(toBin(length % 128 + 128), toBin(length / 128));
-    }
-
-    function toBin(uint256 x) private pure returns (bytes memory b) {
-        if (x > 0) return bytes.concat(toBin(x / 256), bytes1(uint8(x % 256)));
-    }
-
-    function toJSON(string memory _json) internal pure returns (bytes memory) {
-        return bytes.concat(hex"e30101800400", encodeLen(bytes(_json).length), bytes(_json));
-    }
-
-    function checkInterface(address _contract, bytes4 _interface) internal view returns (bool) {
-        try iERC165(_contract).supportsInterface{gas: 99999}(_interface) returns (bool ok) {
-            return ok;
-        } catch {
-            return false;
-        }
-    }
-
-    function checkSupply(address _addr) internal view returns (uint256) {
-        try iERC721(_addr).totalSupply{gas: 99999}() returns (uint256 _supply) {
-            return _supply;
-        } catch {
-            return 0;
-        }
-    }
-
-    function checkSupplyOf(address _addr, uint256 _id) internal view returns (uint256) {
-        try iERC1155(_addr).totalSupply{gas: 99999}(_id) returns (uint256 _supply) {
-            return _supply;
-        } catch {
-            return 0;
-        }
-    }
-    /*
-    function checkENSAddr(bytes[] memory _labels) internal view returns (address _addr, string memory _error) {
-        uint256 len = _labels.length;
-        bytes32 _node = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--len])));
-        bytes memory _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], hex"00");
-        address _resolver;
-        while (len > 0) {
-            _node = keccak256(abi.encodePacked(_node, keccak256(_labels[--len])));
-            _name = abi.encodePacked(uint8(_labels[len].length), _labels[len], _name);
-            if (ENS.resolver(_node) != address(0)) {
-                _resolver = ENS.resolver(_node);
+    error BadLength();
+    function hexStringToBytes(
+        bytes memory _in
+    ) internal pure returns (bytes memory _out) {
+        require(_in.length % 2 == 0, BadLength());
+        unchecked {        
+        uint8 a;
+        uint8 b;
+        uint256 i = _in[1] == bytes1("x") ? 1 : 0;
+        uint j;
+        uint256 k;
+            uint256 len = (_in.length / 2) - i;
+            _out = new bytes(len);
+            while (k < len) {
+                j = 2 * i++;
+                b = uint8(_in[j]) - 48;
+                a = b < 10 ? b : b - 39;
+                b = uint8(_in[++j]) - 48;
+                _out[k++] = bytes1(a * 16 + (b < 10 ? b : b - 39));
             }
         }
-        if (checkInterface(_resolver, iResolver.addr.selector)) {
-            _addr = iResolver(_resolver).addr(_node);
-        } else if (checkInterface(_resolver, iENSIP10.resolve.selector)) {
-            try iENSIP10(_resolver).resolve(_name, abi.encodeWithSelector(iResolver.addr.selector, _node)) returns (
-                bytes memory _data
-            ) {
-                _addr = abi.decode(_data, (address));
-            } catch (bytes memory _lookup) {
-                //error OffchainLookup(address _to, string[] _gateways, bytes _data, bytes4 _callbackFunction, bytes _extradata);
-                //iNotAPI(address(this)).formatLookup(_lookup);
-                //return false;
+    }
+
+    function bytesToHexString(
+        bytes memory _in
+    ) internal pure returns (string memory) {
+        unchecked {
+            uint256 len = _in.length;
+            bytes memory _out = new bytes(len * 2);
+            uint8 b;
+            uint256 k;
+            for (uint256 i = 0; i < len; i++) {
+                b = uint8(_in[i]);
+                k = i * 2;
+                _out[k] = b16[b / 16];
+                _out[k + 1] = b16[b % 16];
             }
-        } else {
-            _error = "ERC20: Invalid ENS Setup";
+            return string.concat("0x", string(_out));
         }
     }
-    */
+
+    function bytesToHexString(
+        bytes memory _buffer,
+        bool prefix
+    ) internal pure returns (string memory) {
+        unchecked {
+            uint256 len = _buffer.length;
+            bytes memory result = new bytes(len * 2);
+            uint8 _b;
+            uint256 k;
+            for (uint256 i = 0; i < len; i++) {
+                _b = uint8(_buffer[i]);
+                k = i * 2;
+                result[k] = b16[_b / 16];
+                result[k + 1] = b16[_b % 16];
+            }
+            return
+                prefix ? string.concat("0x", string(result)) : string(result);
+        }
+    }
+
+    function stringToAddress(
+        bytes memory _addr
+    ) internal pure returns (address) {
+        return
+            address(uint160(uint256(bytes32(hexStringToBytes(_addr)) >> 96)));
+    }
+
+    function toChecksumAddress(
+        address _addr
+    ) public pure returns (string memory) {
+        bytes memory _buffer = abi.encodePacked(_addr);
+        bytes memory result = new bytes(40);
+        bytes32 hash = keccak256(
+            abi.encodePacked(bytesToHexString(_buffer, false))
+        );
+        uint256 a;
+        uint256 b;
+        unchecked {
+            for (uint256 i; i < 20; i++) {
+                a = uint8(_buffer[i]) / 16;
+                b = uint8(_buffer[i]) % 16;
+                result[i * 2] = uint8(hash[i]) / 16 > 7 ? B16[a] : b16[a];
+                result[i * 2 + 1] = uint8(hash[i]) % 16 > 7
+                    ? B16[b]
+                    : b16[b];
+            }
+        }
+        return string.concat("0x", string(result));
+    }
+
+    function uintToString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        uint256 len;
+        unchecked {
+            len = log10(value) + 1;
+            bytes memory buffer = new bytes(len);
+            while (value > 0) {
+                buffer[--len] = bytes1(uint8(48 + (value % 10)));
+                value /= 10;
+            }
+            return string(buffer);
+        }
+    }
 
     function log10(uint256 value) internal pure returns (uint256 result) {
         unchecked {
@@ -114,101 +145,69 @@ library Utils {
             }
         }
     }
-
-    function hexStringToBytes(bytes memory input) internal pure returns (bytes memory output) {
-        require((input).length % 2 == 0, "BAD_LENGTH");
-        uint8 a;
-        uint8 b;
-        uint256 p = input[1] == bytes1("x") ? 1 : 0;
-        uint256 k;
+    function stringToUint(
+        bytes memory num
+    ) internal pure returns (uint256 result) {
         unchecked {
-            uint256 len = (input.length / 2) - p;
-            output = new bytes(len);
-            while (k < len) {
-                b = uint8(input[2 * p]) - 48;
-                a = (b < 10) ? b : b - 39;
-                b = uint8(input[(2 * p++) + 1]) - 48;
-                output[k++] = bytes1((a * 16) + ((b < 10) ? b : b - 39));
+            uint8 c;
+            uint256 l = num.length;
+            for (uint256 i; i < l; i++) {
+                c = uint8(num[i]) - 48;
+                if (c < 10) {
+                    result = result * 10 + c;
+                } else {
+                    revert("Error: Not A Number");
+                }
             }
         }
     }
 
-    function bytesToHexString(bytes memory _buffer) internal pure returns (string memory) {
-        unchecked {
-            uint256 len = _buffer.length;
-            bytes memory result = new bytes(len * 2);
-            uint8 _b;
-            for (uint256 i = 0; i < len; i++) {
-                _b = uint8(_buffer[i]);
-                result[i * 2] = b16[_b / 16];
-                result[(i * 2) + 1] = b16[_b % 16];
-            }
-            return string.concat("0x", string(result));
+    function idToUint(
+        bytes memory id
+    ) internal pure returns (bool ok, uint256 result) {
+        if (id[0] != bytes1("i") || id[1] != bytes1("d")) {
+            return (false, 0);
         }
-    }
-
-    function stringToAddress(bytes memory _addr) internal pure returns (address) {
-        //require(_addr.length == 42 && _addr[1] == bytes1("x") && _addr[0] == bytes1("0"), "Invalid Address Format");
-        return address(uint160(uint256(bytes32(hexStringToBytes(_addr)) >> 96)));
-    }
-
-    function toChecksumAddress(address _addr) internal pure returns (string memory) {
-        if (_addr == address(0)) {
-            return "0x0000000000000000000000000000000000000000";
-        }
-        bytes memory _buffer = abi.encodePacked(_addr);
-        bytes memory result = new bytes(40);
-        bytes32 hash = keccak256(abi.encodePacked(bytesToHexString(_buffer)));
-        uint256 d;
-        uint256 r;
-        unchecked {
-            for (uint256 i = 0; i < 20; i++) {
-                d = uint8(_buffer[i]) / 16;
-                r = uint8(_buffer[i]) % 16;
-                result[i * 2] = uint8(hash[i]) / 16 > 7 ? B16[d] : b16[d];
-                result[i * 2 + 1] = uint8(hash[i]) % 16 > 7 ? B16[r] : b16[r];
-            }
-        }
-        return string.concat("0x", string(result));
-    }
-
-    function uintToString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) return "0";
-        uint256 len;
-        unchecked {
-            len = log10(value) + 1;
-            bytes memory buffer = new bytes(len);
-            while (value > 0) {
-                buffer[--len] = bytes1(uint8(48 + (value % 10)));
-                value /= 10;
-            }
-            return string(buffer);
-        }
-    }
-
-    function stringToUint(bytes memory num) internal pure returns (uint256 result) {
         uint8 c;
-        for (uint256 i; i < num.length; i++) {
-            c = uint8(num[i]);
-            if (c > 47 && c < 58) {
-                result = result * 10 + (c - 48);
-            } else {
-                revert("Error: Not A Number");
+        unchecked {
+            for (uint256 i = 2; i < id.length; i++) {
+                c = uint8(id[i]) - 48;
+                if (c < 10) {
+                    result = (result * 10) + c;
+                } else {
+                    return (false, type(uint).max);
+                }
             }
+            ok = true;
         }
     }
 
-    function toError(string memory _msg) internal view returns (bytes memory) {
-        return toJSON(
-            string.concat(
-                '{"error":"',
-                _msg,
-                '","timestamp":"',
-                uintToString(block.timestamp),
-                '","block":"',
-                uintToString(block.number),
-                '"}'
-            )
-        );
+    //uint256 D = 1e8; // denominator
+
+    function percentX1e8(uint256 n) external pure returns (string memory) {
+        if (n > 99999999) {
+            return "100%";
+        } else if(n < 1000) {
+            return "0.00%";
+        }
+        unchecked {
+            uint256 i = n / 1e6;
+            uint256 r = (n % 1e6) / 1e3; // round 3 decimals
+            uint256 l = (n > 9999999) ? 7 : 6;
+            bytes memory buf = new bytes(l);
+            uint256 k = --l;
+            buf[k] = bytes1("%");
+            l -= 3;
+            while (k > l) {
+                buf[--k] = bytes1(uint8(48 + (r % 10)));
+                r /= 10;
+            }
+            buf[--k] = bytes1(".");
+            while (k > 0) {
+                buf[--k] = bytes1(uint8(48 + (i % 10)));
+                i /= 10;
+            }
+            return string(buf);
+        }
     }
 }
