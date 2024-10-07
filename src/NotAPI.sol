@@ -1,451 +1,228 @@
 // SPDX-License-Identifier: WTFPL.ETH
-pragma solidity >0.8.0 <0.9.0;
+pragma solidity ^0.8.0;
 
 import "./Interface.sol";
 import "./Utils.sol";
 import "./Generator.sol";
-import "./Manager.sol";
+import "./Ticker.sol";
 
 contract NotAPI is Manager {
     using Generator for *;
     using Utils for *;
 
-    iENS public immutable ENS =
-        iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
-    address public ExtraResolver;
+    address public ENSWrapper;
+    address public PubResolver;
 
     constructor() {
         supportsInterface[iENSIP10.resolve.selector] = true;
     }
 
-    error RequestTypeNotImplemented();
+    // Custom Errors
+    error RequestNotImplemented(bytes4);
     error ResolverRequestFailed();
+    error BadRequest();
 
-    function resolve(
-        bytes calldata name,
-        bytes calldata request
-    ) external view returns (bytes memory result) {
+    function resolve(bytes calldata name, bytes calldata request) external view returns (bytes memory result) {
+        uint256 index;
         uint256 level;
-        uint256 ptr;
-        uint256 len;
-        bytes[] memory _labels = new bytes[](12);
-        while (name[ptr] > 0x0) {
-            len = uint8(bytes1(name[ptr:++ptr]));
-            _labels[level++] = name[ptr:ptr += len];
-        }
-        if (level == 2) {
-            if (
-                iERC165(ExtraResolver).supportsInterface(
-                    iENSIP10.resolve.selector
-                )
-            ) {
-                return iENSIP10(ExtraResolver).resolve(name, request);
-            } else if (
-                iERC165(ExtraResolver).supportsInterface(bytes4(request[:4]))
-            ) {
-                bool ok;
-                (ok, result) = ExtraResolver.staticcall(request);
-                if (!ok) {
-                    revert ResolverRequestFailed();
-                }
-            } else {
-                revert RequestTypeNotImplemented();
+        bytes[] memory labels = new bytes[](9);
+        uint256 length;
+        unchecked {
+            while (name[index] > 0x0) {
+                length = uint8(name[index++]);
+                labels[level++] = name[index:index += length];
             }
         }
-        require(
-            bytes4(request[:4]) == iResolver.contenthash.selector,
-            "ONLY_CONTENTHASH"
-        );
-        if (level == 3) {
-            //<*>.notapi.eth
-            return resolve1(_labels[0]);
-        } else if (level == 4) {} else {}
-    }
-
-    function getFeatured(
-        address _addr
-    ) public view returns (string memory _out) {
-        uint256 len = Featured.length;
-        _out = string.concat(
-            '"eth":{"balance":"',
-            (_addr.balance).uintToString(),
-            '","symbol":"ETH","supply":"~","decimals":18,"erc":0}'
-        );
-        Ticker memory _token;
-        // skip 0 in featured array, it's used for eth
-        for (uint256 i = 1; i < len; i++) {
-            _token = Tickers[keccak256(bytes(Featured[i]))];
-            uint256 _bal = _addr.checkBalance(_token._addr);
-            if (_bal > 0) {
-                if (_token._erc == 20) {
-                    iERC20 erc20 = iERC20(_token._addr);
-                    _out = string.concat(
-                        _out,
-                        ',"',
-                        Featured[i],
-                        '":{"balance":"',
-                        (_bal).uintToString(),
-                        '","symbol":"',
-                        erc20.symbol(),
-                        '","decimals":',
-                        (erc20.decimals()).uintToString(),
-                        ',"supply":"',
-                        (erc20.totalSupply()).uintToString(),
-                        '","erc":20}'
-                    );
-                } else if (_token._erc == 721) {
-                    iERC721 erc721 = iERC721(_token._addr);
-                    _out = string.concat(
-                        _out,
-                        ',"',
-                        Featured[i],
-                        '":{"balance":"',
-                        (_bal).uintToString(),
-                        '","supply":"',
-                        (erc721.totalSupply()).uintToString(),
-                        '","symbol":"',
-                        erc721.symbol(),
-                        '","erc":721}'
-                    );
-                }
-            }
+        // <x>--<x> prefix
+        if (labels[0][1] == bytes1("-") && labels[0][1] == labels[0][2]) {
+            if (labels[0][0] == labels[0][3]) {}
         }
-        _out = string.concat(
-            '"address":"',
-            _addr.toChecksumAddress(),
-            '","tokens":{',
-            _out,
-            '}'
-        );
-    }
-
-    function resolve1(bytes memory _label) public view returns (bytes memory) {
-        address _addr;
-        address ensOwner;
-        bytes32 _hash = keccak256(_label);
-        if (Tickers[_hash]._erc > 0) {
-            _addr = Tickers[_hash]._addr;
-        } else if (
-            _label.length == 42 &&
-            _label[1] == bytes1("x") &&
-            _label[0] == bytes1("0")
-        ) {
-            _addr = _label.stringToAddress();
+        if (level == 4) {
+            //revert RequestNotImplemented();
+        } else if (level == 3) {
+            return resolve3(labels[0]);
+        } else if (level == 5) {
+            return resolve2LD(name, request);
+        } else if (level == 6) {
+            return resolve2LD(name, request);
+        } else if (level == 2) {
+            return resolve2LD(name, request);
         } else {
-            _hash = keccak256(abi.encodePacked(ENSRoot, _hash));
-            if (ENS.recordExists(_hash)) {
-                ensOwner = ENS.owner(_hash);
-                address _resolver = ENS.resolver(_hash);
-                try iResolver(_resolver).addr(_hash) returns (
-                    address payable _a
-                ) {
-                    _addr = _a;
-                } catch (bytes memory _e) {
-                    return "BadRequest/L1/ENS".toError(_e);
+            revert RequestNotImplemented(bytes4(request[:4]));
+        }
+    }
+
+    // Resolve for second-level domains
+    function resolve2LD(bytes calldata name, bytes calldata request) internal view returns (bytes memory) {
+        if (PubResolver.checkInterface(iENSIP10.resolve.selector)) {
+            return iENSIP10(PubResolver).resolve(name, request);
+        }
+        if (PubResolver.checkInterface(bytes4(request[:4]))) {
+            (bool ok, bytes memory result) = PubResolver.staticcall(request);
+            if (ok) {
+                return result;
+            }
+            revert ResolverRequestFailed();
+        }
+        revert RequestNotImplemented(bytes4(request[:4]));
+    }
+
+    function resolve3(bytes memory label) public view returns (bytes memory) {
+        bytes32 node = keccak256(label);
+        address _addr = Tickers[node]._addr;
+        uint256 _erc = Tickers[node]._erc;
+        bytes memory ensData;
+        if (_addr == address(0)) {
+            if (label.length == 42 && label[1] == bytes1("x") && label[0] == bytes1("0")) {
+                _addr = string(label).stringToAddress();
+            } else if (ENS.recordExists(keccak256(abi.encodePacked(ENSRoot, node)))) {
+                (address _ensAddr, address _owner, address _manager, bytes memory _err) = getENSAddr(label);
+                if (_ensAddr != address(0) && _err.length == 0) {
+                    ensData = abi.encodePacked(
+                        '"ENS":["',
+                        string(label),
+                        '.eth","',
+                        _owner.toChecksumAddress(),
+                        '","',
+                        _manager.toChecksumAddress(),
+                        '"],'
+                    );
+                    _addr = _ensAddr;
+                    //return _ensAddr.getENSInfo(label, _owner, _manager).toJSON();
+                } else if (_err.length > 0) {
+                    // return _err.toError(label);
                 }
-            } else {
-                return "BadRequest/L1/ZeroAddr".toError();
+            }
+            if (_addr == address(0)) {
+                return "Address Not Found".toError(label);
             }
         }
         if (_addr.code.length > 0) {
-            if (_addr.checkDecimals20() > 0) {
-                return string.concat(_addr.erc20Data()).toJSON();
-            } else if (_addr.interfaceCheck(type(iERC721).interfaceId)) {
-                return string.concat().toJSON();
-            } else if (_addr.interfaceCheck(type(iERC1155).interfaceId)) {
-                return string.concat().toJSON();
-            }
-        }
-        return getFeatured(_addr).toJSON();
-    }
-
-    function resolve2(
-        bytes memory _labelA,
-        bytes memory _labelB
-    ) public view returns (bytes memory) {}
-
-    error BadRequest();
-
-    function getAddrData(
-        address _addr,
-        address _contract,
-        uint16 _erc
-    ) public view returns (bool ok, bytes memory _res) {
-        if (_erc == 20) {
-            iERC20 erc20 = iERC20(_contract);
-            _res = bytes(
-                string.concat(
-                    '"balance":"',
-                    (erc20.balanceOf(_addr)).uintToString(),
-                    '","erc":20,"address":"',
-                    _addr.toChecksumAddress(),
-                    '","contract":"',
-                    _contract.toChecksumAddress(),
-                    '","symbol":"',
-                    erc20.symbol(),
-                    '","decimals":',
-                    (erc20.decimals()).uintToString(),
-                    ',"supply":"',
-                    (erc20.totalSupply()).uintToString(),
-                    '"'
-                )
-            );
-        } else if (_erc == 721) {
-            iERC721 erc721 = iERC721(_contract);
-            _res = bytes(
-                string.concat(
-                    '"balance":"',
-                    (erc721.balanceOf(_addr)).uintToString(),
-                    '","erc":721,"address":"',
-                    _addr.toChecksumAddress(),
-                    '","contract":"',
-                    _contract.toChecksumAddress(),
-                    '","symbol":"',
-                    erc721.symbol(),
-                    '","supply":"',
-                    (erc721.totalSupply()).uintToString(),
-                    '"'
-                )
-            );
-        } else if (_erc == 1155) {}
-    }
-
-    function getIDData(
-        uint256 _id,
-        address _contract,
-        uint16 _erc
-    ) public view returns (bool ok, bytes memory _res) {
-        if (_erc == 721) {
-            iERC721 erc721 = iERC721(_contract);
-            //try erc20.decimals() returns (uint8 _dec) {
-            //    if (_dec > 0) {
-            address _owner = erc721.ownerOf(_id);
-            _res = bytes(
-                string.concat(
-                    '"balance":"',
-                    (erc721.balanceOf(_owner)).uintToString(),
-                    '","owner":"',
-                    (_owner).toChecksumAddress(),
-                    '","erc":721,"contract":"',
-                    _contract.toChecksumAddress(),
-                    '","symbol":"',
-                    erc721.symbol(),
-                    '","supply":"',
-                    (erc721.totalSupply()).uintToString(),
-                    '"'
-                )
-            );
-            //}
-            //} catch (bytes memory _e) {
-            //    return "Bad Request/1/Addr".toError(_e);
-            //}
-        } else if (_erc == 1155) {
-            iERC1155 erc1155 = iERC1155(_contract);
-            address _owner; // = erc1155.ownerOf(_id);
-            _res = bytes(
-                string.concat(
-                    '"balance":"',
-                    //(erc1155.balanceOf(_addr)).uintToString(),
-                    '","erc":1155,"address":"',
-                    //_addr.toChecksumAddress(),
-                    '","contract":"',
-                    _contract.toChecksumAddress(),
-                    '","symbol":"',
-                    erc1155.symbol(),
-                    '","supply":"',
-                    //(erc1155.totalSupply()).uintToString(),
-                    '"'
-                )
-            );
-        } else if (_erc == 1155) {}
-    }
-
-    function getType2A(
-        uint16 _erc,
-        address _addr,
-        bytes memory _label
-    ) public view returns (bytes memory _data) {
-        uint16 _ercA;
-        address _addrA;
-        address _ensOwner;
-        if (
-            _label.length % 2 == 0 &&
-            _label[1] == bytes1("x") &&
-            _label[0] == bytes1("0")
-        ) {
-            if (_label.length == 10 || (_label.length - 10) % 64 == 0) {
-                (bool ok, bytes memory _res) = _addr.getCalldata(_label);
-                if (ok) {
-                    return string(_res).toJSON();
+            if (_erc > 19) {
+                if (_erc == 20) {
+                    return _addr.getERC20Info().toJSON();
                 }
-            } else if (_label.length == 42) {
-                _addrA = _label.stringToAddress();
-            }
-        } else if (_label[1] == bytes1("d") && _label[0] == bytes1("i")) {
-            (bool ok, uint256 id) = _label.idToUint();
-            if (ok && (_erc == 1155 || _erc == 721)) {}
-        }
-        bytes32 _hash = keccak256(_label);
-        if (_label.length < 42) {
-            _hash = keccak256(abi.encodePacked(ENSRoot, _hash));
-            if (ENS.recordExists(_hash)) {
-                _ensOwner = ENS.owner(_hash);
-                address _resolver = ENS.resolver(_hash);
-                try iResolver(_resolver).addr(_hash) returns (
-                    address payable _a
-                ) {
-                    _addr = _a;
-                } catch (bytes memory _e) {
-                    //_err = _e;
-                }
-            } else {
-                //revert BadRequest();
-            }
-        } else if (
-            _label.length == 42 &&
-            _label[1] == bytes1("x") &&
-            _label[0] == bytes1("0")
-        ) {
-            _addr = _label.stringToAddress();
-        } else {
-            //revert BadRequest();
-        }
-
-        if (_erc == 0 && _addr.code.length > 0) {
-            if (iERC165(_addr).supportsInterface(type(iERC721).interfaceId)) {
-                _erc = 721;
-            } else if (
-                iERC165(_addr).supportsInterface(type(iERC1155).interfaceId)
-            ) {
-                _erc = 1155;
-            } else {
-                try iERC20(_addr).totalSupply() returns (uint256 _supply) {
-                    if (_supply > 0) {
-                        _erc = 20;
-                    }
-                } catch (bytes memory _e) {
-                    //_err = _e;
+                if (_erc == 721) {
+                    return _addr.getERC721Info().toJSON();
                 }
             }
+
+            if (_addr.isERC721()) {
+                return _addr.getERC721Info().toJSON();
+            }
+            if (_addr.isERC20()) {
+                return _addr.getERC20Info().toJSON();
+            }
         }
-        if (_erc == 0) {
-            //revert BadRequest();
+        return getFeatured(_addr);
+    }
+
+    function resolve4(bytes memory labelA, bytes memory labelB) internal view returns (bytes memory) {}
+
+    // Retrieve address from label
+    function getAddressFromLabel(bytes memory label) internal view returns (address _addr) {
+        bytes32 node = keccak256(label);
+        _addr = Tickers[node]._addr;
+        if (_addr == address(0)) {
+            if (label.isAddr()) {
+                return string(label).stringToAddress();
+            }
+            node = keccak256(abi.encodePacked(ENSRoot, node));
+            if (ENS.recordExists(node)) {
+                return resolveENS(node);
+            }
         }
     }
 
-    function getType2B(
-        bytes memory _label
-    )
-        public
+    function getENSAddr(bytes memory label)
+        internal
         view
-        returns (
-            uint16 _erc,
-            address _addr,
-            address _ensOwner,
-            bytes memory _err
-        )
+        returns (address _addr, address _owner, address _manager, bytes memory _err)
     {
-        bytes32 _hash = keccak256(_label);
-        if (Tickers[_hash]._erc > 0) {
-            _addr = Tickers[_hash]._addr;
-            _erc = Tickers[_hash]._erc;
-        } else if (
-            _label.length == 42 &&
-            _label[1] == bytes1("x") &&
-            _label[0] == bytes1("0")
-        ) {
-            _addr = _label.stringToAddress();
-        } else {
-            _hash = keccak256(abi.encodePacked(ENSRoot, _hash));
-            if (ENS.recordExists(_hash)) {
-                _ensOwner = ENS.owner(_hash);
-                address _resolver = ENS.resolver(_hash);
-                try iResolver(_resolver).addr(_hash) returns (
-                    address payable _a
-                ) {
-                    if (_a == address(0)) {
-                        _addr = _ensOwner;
-                    } else {
-                        _addr = _a;
-                    }
-                } catch (bytes memory _e) {
-                    _err = _e;
+        bytes32 node = keccak256(abi.encodePacked(ENSRoot, keccak256(label)));
+        address resolver = ENS.resolver(node);
+        if (resolver != address(0)) {
+            if (resolver.checkInterface(iResolver.addr.selector)) {
+                _addr = iResolver(resolver).addr(node);
+            } else if (resolver.checkInterface(iOverloadResolver.addr.selector)) {
+                _addr = abi.decode(iOverloadResolver(resolver).addr(node, 60), (address));
+            } else if (iERC165(resolver).supportsInterface(iENSIP10.OffchainLookup.selector)) {
+                try iENSIP10(resolver).resolve(
+                    abi.encodePacked(uint8(label.length), label, uint8(3), "eth", uint8(0)),
+                    abi.encodeWithSelector(iResolver.addr.selector, node)
+                ) returns (bytes memory result) {
+                    _addr = abi.decode(result, (address));
+                } catch (bytes memory err) {
+                    _err = err;
                 }
             } else {
-                //revert BadRequest();
+                _err = "Resolver does not support OffchainLookup";
             }
         }
-        if (_erc == 0 && _addr.code.length > 0) {
-            if (iERC165(_addr).supportsInterface(type(iERC721).interfaceId)) {
-                _erc = 721;
-            } else if (
-                iERC165(_addr).supportsInterface(type(iERC1155).interfaceId)
-            ) {
-                _erc = 1155;
-            } else {
-                try iERC20(_addr).totalSupply() returns (uint256 _supply) {
-                    if (_supply > 0) {
-                        _erc = 20;
-                    }
-                } catch (bytes memory _e) {
-                    _err = _e;
-                }
-            }
-        }
-        if (_erc == 0) {
-            //revert BadRequest();
-        }
+        _manager = ENS.owner(node);
+        _owner = ENSNFT.getNFTOwner(uint256(keccak256(label)));
     }
 
-    function getType(
-        bytes memory _label
-    ) public view returns (uint16 _erc, address _addr, bytes memory _err) {
-        if (
-            _label.length == 42 &&
-            _label[1] == bytes1("x") &&
-            _label[0] == bytes1("0")
-        ) {
-            _addr = _label.stringToAddress();
-            if (_addr.code.length > 0) {
-                if (
-                    iERC165(_addr).supportsInterface(type(iERC721).interfaceId)
-                ) {
-                    _erc = 721;
-                } else if (
-                    iERC165(_addr).supportsInterface(type(iERC1155).interfaceId)
-                ) {
-                    _erc = 1155;
-                } else {
-                    try iERC20(_addr).totalSupply() returns (uint256 _supply) {
-                        if (_supply > 0) {
-                            _erc = 20;
-                        }
-                    } catch (bytes memory _e) {
-                        _err = _e;
-                    }
-                }
+    // Resolve ENS to get the address
+    function resolveENS(bytes32 hash) internal view returns (address) {
+        bytes32 node = keccak256(abi.encodePacked(ENSRoot, hash));
+        if (ENS.recordExists(node)) {
+            address resolver = ENS.resolver(node);
+            if (iERC165(resolver).supportsInterface(iResolver.addr.selector)) {
+                return iResolver(resolver).addr(node);
             }
-        } else {
-            bytes32 _hash = keccak256(_label);
-            if (Tickers[_hash]._erc > 0) {
-                _addr = Tickers[_hash]._addr;
-                _erc = Tickers[_hash]._erc;
+        }
+        return address(0);
+    }
+
+    // Handle third-level domains
+    function getAddrByLabelA(bytes memory label) public view returns (address _addr, uint256 erc) {
+        bytes32 hash = keccak256(label);
+        _addr = Tickers[hash]._addr;
+        if (_addr == address(0)) {
+            if ((label.length == 42 && label[1] == bytes1("x") && label[0] == bytes1("0"))) {
+                _addr = string(label).stringToAddress();
             } else {
-                _hash = keccak256(abi.encodePacked(ENSRoot, _hash));
-                if (ENS.recordExists(_hash)) {
-                    _erc = 137;
-                    //address _resolver = ENS.resolver(_hash);
-                    try iResolver(ENS.resolver(_hash)).addr(_hash) returns (
-                        address payable _a
-                    ) {
-                        _addr = _a;
-                    } catch (bytes memory _e) {
-                        _err = _e;
+                hash = keccak256(abi.encodePacked(ENSRoot, hash));
+                if (ENS.recordExists(hash)) {
+                    address resolver = ENS.resolver(hash);
+                    if (resolver != address(0)) {
+                        try iResolver(resolver).addr(hash) returns (address payable addr) {
+                            _addr = addr;
+                        } catch {
+                            try iENSIP10(resolver).resolve(
+                                abi.encodePacked(uint8(label.length), label, hex"03", "eth", uint8(0)),
+                                abi.encodeWithSelector(iResolver.addr.selector, hash)
+                            ) returns (bytes memory result) {
+                                _addr = abi.decode(result, (address));
+                            } catch (bytes memory err) {
+                                bytes4 off = bytes4(this.getBytes(err, 0, 4));
+                                if (off == iENSIP10.OffchainLookup.selector) {
+                                    //offchain = true;
+                                }
+                            }
+                        }
+
+                        if (resolver.checkInterface(iResolver.addr.selector)) {
+                            _addr = iResolver(resolver).addr(hash);
+                        } else {
+                            //_addr =
+                        }
                     }
-                } else {
-                    revert BadRequest();
                 }
             }
         }
+
+        if (_addr.code.length > 0) {
+            if (_addr.isERC721()) {
+                // return _addr.getERC721Info().toJSON();
+            } else if (_addr.isERC20()) {
+                // return _addr.getERC20Info().toJSON();
+            }
+        }
+        if (_addr != address(0)) {
+            // return getFeatured(_addr);
+        }
+        // return "Address Not Found".toError(label);
     }
 }

@@ -7,7 +7,6 @@ libs = ["lib"]
 # Enables or disables the optimizer
 optimizer = true
 viaIR = true
-
 # The number of optimizer runs
-optimizer_runs = 666
+optimizer_runs = 9999
 gas_reports = ["*"]

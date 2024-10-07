@@ -10,38 +10,38 @@ contract UtilsTest is Test {
     function testHexStringToBytes() public {
         assertEq(
             bytes(hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-            bytes(string("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).hexStringToBytes()
+            bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").hexStringToBytes()
         );
         assertEq(
             bytes(hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-            bytes(string("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).hexStringToBytes()
+            bytes("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").hexStringToBytes()
         );
         assertEq(
             bytes(hex"0000000000000000000000000000000000000000000000000000000000000000"),
-            bytes(string("0x0000000000000000000000000000000000000000000000000000000000000000")).hexStringToBytes()
+            bytes("0x0000000000000000000000000000000000000000000000000000000000000000").hexStringToBytes()
         );
     }
 
     function testBytesToHexString() public {
         assertEq(
-            string("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+            string("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
             hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".bytesToHexString()
         );
         assertEq(
-            string("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            string("0000000000000000000000000000000000000000000000000000000000000000"),
             hex"0000000000000000000000000000000000000000000000000000000000000000".bytesToHexString()
         );
     }
 
     function testStringToAddress() public {
-        assertEq(address(0), bytes(string("0x0000000000000000000000000000000000000000")).stringToAddress());
+        assertEq(address(0), string("0x0000000000000000000000000000000000000000").stringToAddress());
         assertEq(
             address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF),
-            bytes(string("0xffffffffffffffffffffffffffffffffffffffff")).stringToAddress()
+            string("0xffffffffffffffffffffffffffffffffffffffff").stringToAddress()
         );
         assertEq(
             address(0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06),
-            bytes(string("0x7b0cc5dd236eea79c8739468bb56ed5e147c8b06")).stringToAddress()
+            string("0x7b0cc5dd236eea79c8739468bb56ed5e147c8b06").stringToAddress()
         );
     }
 
@@ -83,28 +83,28 @@ contract UtilsTest is Test {
     }
 
     function testPercent() public {
-        assertEq("0.001%", uint(1234).percentX1e8());
-        assertEq("0.012%", uint(12345).percentX1e8());
-        assertEq("0.123%", uint(123456).percentX1e8());
-        assertEq("1.234%", uint(1234567).percentX1e8());
-        assertEq("12.345%", uint(12345678).percentX1e8());
-        assertEq("0.00%", uint(999).percentX1e8());
-        assertEq("0.999%", uint(999999).percentX1e8());
-        assertEq("9.999%", uint(9999999).percentX1e8());
-        assertEq("1.000%", uint(1000000).percentX1e8());
-        assertEq("10.000%", uint(10000000).percentX1e8());
-        assertEq("100%", uint(100000000).percentX1e8());
+        assertEq("0.001%", uint256(1234).percent1e8());
+        assertEq("0.012%", uint256(12345).percent1e8());
+        assertEq("0.123%", uint256(123456).percent1e8());
+        assertEq("1.234%", uint256(1234567).percent1e8());
+        assertEq("12.345%", uint256(12345678).percent1e8());
+        assertEq("0.00%", uint256(999).percent1e8());
+        assertEq("0.999%", uint256(999999).percent1e8());
+        assertEq("9.999%", uint256(9999999).percent1e8());
+        assertEq("1.000%", uint256(1000000).percent1e8());
+        assertEq("10.000%", uint256(10000000).percent1e8());
+        assertEq("100%", uint256(100000000).percent1e8());
     }
 
     function testIdToUint() public {
-        (bool ok, uint num) = bytes("id123456").idToUint(); 
+        (bool ok, uint256 num) = bytes("id123456").idToUint();
         assertTrue(ok);
-        assertEq(uint(123456), num);
-        (ok, num) = bytes("identity").idToUint(); 
+        assertEq(uint256(123456), num);
+        (ok, num) = bytes("identity").idToUint();
         assertFalse(ok);
-        assertEq(type(uint).max, num);
-        (ok, num) = bytes("id001").idToUint(); 
+        assertEq(type(uint256).max, num);
+        (ok, num) = bytes("id001").idToUint();
         assertTrue(ok);
-        assertEq(uint(1), num);
+        assertEq(uint256(1), num);
     }
 }

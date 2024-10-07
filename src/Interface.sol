@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: WTFPL.ETH
 pragma solidity >0.8.0 <0.9.0;
-/*
- * @title : NotAPI.eth
- * Proof of Concept* on-chain dynamic ENS contenthash generator
- * @author : freetib.eth, sshmatrix.eth
- * @github : https://github.com/namesys-eth/notapi-eth
- */
 
 interface iERC165 {
     function supportsInterface(bytes4) external view returns (bool);
@@ -77,7 +71,7 @@ interface iERC721 is iERC721Metadata, iERC721Enumerable {
     function isApprovedForAll(address _owner, address _operator) external view returns (bool);
 }
 
-interface iERC1155Metadata is iERC721Metadata {
+/*interface iERC1155Metadata is iERC721Metadata {
     function uri(uint256 _id) external view returns (string memory);
     function totalSupply(uint256 id) external view returns (uint256);
 }
@@ -112,12 +106,45 @@ interface iERC1155 is iERC1155Metadata {
     function setApprovalForAll(address _operator, bool _approved) external;
 
     function isApprovedForAll(address _owner, address _operator) external view returns (bool);
-}
+}*/
 
 interface iENSIP10 {
     error OffchainLookup(address _to, string[] _gateways, bytes _data, bytes4 _callbackFunction, bytes _extradata);
 
     function resolve(bytes memory _name, bytes memory _data) external view returns (bytes memory);
+}
+
+interface iENSNFT is iERC721, iERC165, iERC173 {
+    function nameExpires(uint256 id) external view returns (uint256);
+
+    function GRACE_PERIOD() external view returns (uint256);
+
+    function available(uint256 id) external view returns (bool);
+
+    function baseNode() external view returns (bytes32);
+}
+
+interface iERC7572 {
+    function contractURI() external view returns (string memory);
+}
+
+interface iERC2981 is iERC165 {
+    function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
+        external
+        view
+        returns (address receiver, uint256 royaltyAmount);
+}
+
+interface iENS {
+    function owner(bytes32 node) external view returns (address);
+
+    function resolver(bytes32 node) external view returns (address);
+
+    function ttl(bytes32 node) external view returns (uint64);
+
+    function recordExists(bytes32 node) external view returns (bool);
+
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
 }
 
 interface iResolver {
@@ -146,28 +173,26 @@ interface iResolver {
 
 interface iOverloadResolver {
     function addr(bytes32 node, uint256 coinType) external view returns (bytes memory);
+
     function dnsRecord(bytes32 node, bytes memory name, uint16 resource) external view returns (bytes memory);
 }
 
-interface iERC7572 {
-    function contractURI() external view returns (string memory);
-}
+interface iUtils {
+    function hexStringToBytes(string memory _in) external pure returns (bytes memory _out);
 
-interface iERC2981 is iERC165 {
-    function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
-        external
-        view
-        returns (address receiver, uint256 royaltyAmount);
-}
+    function bytesToHexString(bytes memory _input) external pure returns (string memory);
 
-interface iENS {
-    function owner(bytes32 node) external view returns (address);
+    function stringToAddress(string memory _addr) external pure returns (address);
 
-    function resolver(bytes32 node) external view returns (address);
+    function toChecksumAddress(address _addr) external pure returns (string memory);
 
-    function ttl(bytes32 node) external view returns (uint64);
+    function uintToString(uint256 value) external pure returns (string memory);
 
-    function recordExists(bytes32 node) external view returns (bool);
+    function log10(uint256 value) external pure returns (uint256 result);
 
-    function isApprovedForAll(address owner, address operator) external view returns (bool);
+    function stringToUint(bytes calldata num) external pure returns (uint256 result);
+
+    function percent1e8(uint256 n) external pure returns (string memory);
+
+    function bytesToBytes4Array(bytes memory input) external pure returns (bytes4[] memory result);
 }
