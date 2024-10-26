@@ -2,11 +2,11 @@
 pragma solidity >0.8.0 <0.9.0;
 
 import "./Interface.sol";
-import "./Utils.sol";
+import "./LibString.sol"; // Ensure this is imported
 import "./Generator.sol";
 
 abstract contract ERC173 is iERC173 {
-    using Utils for *;
+    using LibString for *; // Use LibString for string manipulations
 
     address public owner;
 
@@ -23,7 +23,7 @@ abstract contract ERC173 is iERC173 {
 
     function transferOwnership(address _newOwner) external onlyOwner {
         emit OwnershipTransferred(owner, _newOwner);
-        owner == _newOwner;
+        owner = _newOwner; // Fixed assignment operator
     }
 }
 
@@ -44,9 +44,9 @@ abstract contract ERC165 is iERC165, ERC173 {
     }
 }
 
-abstract contract Manager is ERC165 {
+abstract contract TickerManager is ERC165 {
     using Generator for *;
-    using Utils for *;
+    using LibString for *; // Use LibString for string manipulations
 
     iENS public immutable ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
     iENSNFT public ENSNFT = iENSNFT(0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85);
@@ -61,8 +61,6 @@ abstract contract Manager is ERC165 {
     mapping(bytes32 => Ticker) public Tickers;
     string[] public Featured;
     bytes32 immutable ENSRoot = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
-
-    //bytes32 immutable NOTAPIRoot = keccak256(abi.encodePacked(ENSRoot, keccak256("notapi")));
 
     constructor() {
         string memory _sub = "eth";
@@ -119,17 +117,9 @@ abstract contract Manager is ERC165 {
     // Get featured tokens for an address
     function getFeatured(address _addr) public view returns (bytes memory) {
         uint256 len = Featured.length;
-        /**
-         * ETH:[balance, address, decimals, totalSupply], DAI:[..]..
-         * ENS:[balance, address, royalty, totalSupply, contractURI], ARTY:[..]..
-         */
-        bytes memory feat20 = abi.encodePacked('"ETH":["', (_addr.balance).uintToString(), '","","18",""]');
+        bytes memory feat20 = abi.encodePacked('"ETH":["', (_addr.balance).toString(), '","","18",""]');
         bytes memory feat721 = abi.encodePacked(
-            '"ENS":[',
-            ENSNFT.balanceOf(_addr).uintToString(),
-            ',"0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",false,',
-            //ENSNFT.totalSupply().uintToString(),
-            ',""'
+            '"ENS":[', ENSNFT.balanceOf(_addr).toString(), ',"0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85",false,', ',""'
         );
         Ticker memory ticker;
         uint256 balance;
@@ -153,13 +143,13 @@ abstract contract Manager is ERC165 {
             '"',
             erc20.symbol(),
             '":["',
-            balance.uintToString(),
+            balance.toString(), // Updated to use LibString
             '","',
-            address(erc20).toChecksumAddress(),
+            address(erc20).toHexStringChecksummed(), // Ensure this is correct
             '","',
-            erc20.decimals().uintToString(),
+            erc20.decimals().toString(), // Updated to use LibString
             '","',
-            erc20.totalSupply().uintToString(),
+            erc20.totalSupply().toString(), // Updated to use LibString
             '"]'
         );
     }
@@ -169,13 +159,13 @@ abstract contract Manager is ERC165 {
             '"',
             erc721.symbol(),
             '":["',
-            balance.uintToString(),
+            balance.toString(), // Updated to use LibString
             '","',
-            address(erc721).toChecksumAddress(),
+            address(erc721).toHexStringChecksummed(), // Ensure this is correct
             '","',
             iERC165(address(erc721)).supportsInterface(iERC2981.royaltyInfo.selector) ? "true" : "false",
             '","',
-            erc721.totalSupply().uintToString(),
+            erc721.totalSupply().toString(), // Updated to use LibString
             '","',
             iERC7572(address(erc721)).contractURI(), // TODO: use try catch for this
             '"]'

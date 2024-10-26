@@ -2,13 +2,14 @@
 pragma solidity ^0.8.0;
 
 import "./Interface.sol";
-import "./Utils.sol";
 import "./Generator.sol";
-import "./Ticker.sol";
+import "./Ticker.sol"; // Ensure this is the correct import
+import "./Utils.sol";
 
-contract NotAPI is Manager {
+contract NotAPI is TickerManager {
     using Generator for *;
     using Utils for *;
+    using LibString for *; // Updated to use LibString
 
     address public ENSWrapper;
     address public PubResolver;
@@ -27,6 +28,7 @@ contract NotAPI is Manager {
         uint256 level;
         bytes[] memory labels = new bytes[](9);
         uint256 length;
+
         unchecked {
             while (name[index] > 0x0) {
                 length = uint8(name[index++]);
@@ -38,22 +40,18 @@ contract NotAPI is Manager {
             if (labels[0][0] == labels[0][3]) {}
         }
         if (level == 4) {
-            //revert RequestNotImplemented();
+            return resolve4(labels[0], labels[1]); // Call resolve4 for fourth-level domains
         } else if (level == 3) {
             return resolve3(labels[0]);
-        } else if (level == 5) {
-            return resolve2LD(name, request);
-        } else if (level == 6) {
-            return resolve2LD(name, request);
         } else if (level == 2) {
-            return resolve2LD(name, request);
+            return resolve2(name, request);
         } else {
             revert RequestNotImplemented(bytes4(request[:4]));
         }
     }
 
     // Resolve for second-level domains
-    function resolve2LD(bytes calldata name, bytes calldata request) internal view returns (bytes memory) {
+    function resolve2(bytes calldata name, bytes calldata request) internal view returns (bytes memory) {
         if (PubResolver.checkInterface(iENSIP10.resolve.selector)) {
             return iENSIP10(PubResolver).resolve(name, request);
         }
@@ -74,23 +72,23 @@ contract NotAPI is Manager {
         bytes memory ensData;
         if (_addr == address(0)) {
             if (label.length == 42 && label[1] == bytes1("x") && label[0] == bytes1("0")) {
-                _addr = string(label).stringToAddress();
+                _addr = string(label).stringToAddress(); // Updated to use LibString
             } else if (ENS.recordExists(keccak256(abi.encodePacked(ENSRoot, node)))) {
-                (address _ensAddr, address _owner, address _manager, bytes memory _err) = getENSAddr(label);
+                (address _ensAddr, address _owner, address _manager, address _resolver, bytes memory _err) =
+                    getENSAddr(label);
                 if (_ensAddr != address(0) && _err.length == 0) {
                     ensData = abi.encodePacked(
-                        '"ENS":["',
+                        '"ENS":{"domain":"',
                         string(label),
-                        '.eth","',
-                        _owner.toChecksumAddress(),
-                        '","',
-                        _manager.toChecksumAddress(),
-                        '"],'
+                        '.eth","owner":"',
+                        _owner.toHexStringChecksummed(),
+                        '","manager":"',
+                        _manager.toHexStringChecksummed(),
+                        '","resolver":"',
+                        _resolver.toHexStringChecksummed(),
+                        '"},'
                     );
                     _addr = _ensAddr;
-                    //return _ensAddr.getENSInfo(label, _owner, _manager).toJSON();
-                } else if (_err.length > 0) {
-                    // return _err.toError(label);
                 }
             }
             if (_addr == address(0)) {
@@ -98,7 +96,15 @@ contract NotAPI is Manager {
             }
         }
         if (_addr.code.length > 0) {
-            if (_erc > 19) {
+            if (_erc == 0) {
+                if (_addr.isERC721()) {
+                    _erc = 721;
+                }
+                if (_addr.isERC20()) {
+                    _erc = 20;
+                }
+            }
+            if (_erc > 0) {
                 if (_erc == 20) {
                     return _addr.getERC20Info().toJSON();
                 }
@@ -106,18 +112,26 @@ contract NotAPI is Manager {
                     return _addr.getERC721Info().toJSON();
                 }
             }
-
-            if (_addr.isERC721()) {
-                return _addr.getERC721Info().toJSON();
-            }
-            if (_addr.isERC20()) {
-                return _addr.getERC20Info().toJSON();
-            }
         }
         return getFeatured(_addr);
     }
 
-    function resolve4(bytes memory labelA, bytes memory labelB) internal view returns (bytes memory) {}
+    function resolve4(bytes memory labelA, bytes memory labelB) internal view returns (bytes memory) {
+        // Resolve the first label
+        address addrA = getAddressFromLabel(labelA);
+        if (addrA == address(0)) {
+            return "Address Not Found".toError(labelA);
+        }
+
+        // Resolve the second label
+        address addrB = getAddressFromLabel(labelB);
+        if (addrB == address(0)) {
+            return "Address Not Found".toError(labelB);
+        }
+
+        // Return combined information or perform additional logic as needed
+        return abi.encodePacked("Resolved:", addrA, addrB);
+    }
 
     // Retrieve address from label
     function getAddressFromLabel(bytes memory label) internal view returns (address _addr) {
@@ -125,7 +139,7 @@ contract NotAPI is Manager {
         _addr = Tickers[node]._addr;
         if (_addr == address(0)) {
             if (label.isAddr()) {
-                return string(label).stringToAddress();
+                return string(label).stringToAddress(); // Updated to use LibString
             }
             node = keccak256(abi.encodePacked(ENSRoot, node));
             if (ENS.recordExists(node)) {
@@ -137,17 +151,17 @@ contract NotAPI is Manager {
     function getENSAddr(bytes memory label)
         internal
         view
-        returns (address _addr, address _owner, address _manager, bytes memory _err)
+        returns (address _addr, address _owner, address _manager, address _resolver, bytes memory _err)
     {
         bytes32 node = keccak256(abi.encodePacked(ENSRoot, keccak256(label)));
-        address resolver = ENS.resolver(node);
-        if (resolver != address(0)) {
-            if (resolver.checkInterface(iResolver.addr.selector)) {
-                _addr = iResolver(resolver).addr(node);
-            } else if (resolver.checkInterface(iOverloadResolver.addr.selector)) {
-                _addr = abi.decode(iOverloadResolver(resolver).addr(node, 60), (address));
-            } else if (iERC165(resolver).supportsInterface(iENSIP10.OffchainLookup.selector)) {
-                try iENSIP10(resolver).resolve(
+        _resolver = ENS.resolver(node);
+        if (_resolver != address(0)) {
+            if (_resolver.checkInterface(iResolver.addr.selector)) {
+                _addr = iResolver(_resolver).addr(node);
+            } else if (_resolver.checkInterface(iOverloadResolver.addr.selector)) {
+                _addr = abi.decode(iOverloadResolver(_resolver).addr(node, 60), (address));
+            } else if (iERC165(_resolver).supportsInterface(iENSIP10.OffchainLookup.selector)) {
+                try iENSIP10(_resolver).resolve(
                     abi.encodePacked(uint8(label.length), label, uint8(3), "eth", uint8(0)),
                     abi.encodeWithSelector(iResolver.addr.selector, node)
                 ) returns (bytes memory result) {
@@ -181,7 +195,7 @@ contract NotAPI is Manager {
         _addr = Tickers[hash]._addr;
         if (_addr == address(0)) {
             if ((label.length == 42 && label[1] == bytes1("x") && label[0] == bytes1("0"))) {
-                _addr = string(label).stringToAddress();
+                _addr = string(label).stringToAddress(); // Updated to use LibString
             } else {
                 hash = keccak256(abi.encodePacked(ENSRoot, hash));
                 if (ENS.recordExists(hash)) {
@@ -205,8 +219,6 @@ contract NotAPI is Manager {
 
                         if (resolver.checkInterface(iResolver.addr.selector)) {
                             _addr = iResolver(resolver).addr(hash);
-                        } else {
-                            //_addr =
                         }
                     }
                 }

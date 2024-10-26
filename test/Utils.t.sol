@@ -2,10 +2,12 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
+import {LibString} from "../src/LibString.sol"; // Use LibString directly
 import {Utils} from "../src/Utils.sol";
 
 contract UtilsTest is Test {
-    using Utils for *;
+    using LibString for *; // Use LibString for all string manipulations
+    using Utils for *; // Use LibString for all string manipulations
 
     function testHexStringToBytes() public {
         assertEq(
@@ -24,12 +26,12 @@ contract UtilsTest is Test {
 
     function testBytesToHexString() public {
         assertEq(
-            string("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-            hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".bytesToHexString()
+            string("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+            hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".toHexString()
         );
         assertEq(
-            string("0000000000000000000000000000000000000000000000000000000000000000"),
-            hex"0000000000000000000000000000000000000000000000000000000000000000".bytesToHexString()
+            string("0x0000000000000000000000000000000000000000000000000000000000000000"),
+            hex"0000000000000000000000000000000000000000000000000000000000000000".toHexString()
         );
     }
 
@@ -47,23 +49,35 @@ contract UtilsTest is Test {
 
     function testChecksumAddress() public {
         assertEq(
-            address(0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06).toChecksumAddress(),
+            address(0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06).toHexStringChecksummed(),
             string("0x7B0Cc5DD236EEA79C8739468BB56Ed5e147c8b06")
+        );
+        assertEq(
+            address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF).toHexStringChecksummed(),
+            string("0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF")
+        );
+        assertEq(
+            address(0x0000000000000000000000000000000000000000).toHexStringChecksummed(),
+            string("0x0000000000000000000000000000000000000000")
+        );
+        assertEq(
+            address(0x1234567890AbcdEF1234567890aBcdef12345678).toHexStringChecksummed(),
+            string("0x1234567890AbcdEF1234567890aBcdef12345678")
         );
     }
 
     function testUintToString() public {
-        assertEq(string("123456789"), 123456789.uintToString());
-        assertEq(string("0"), 0.uintToString());
-        assertEq(string("11111"), 11111.uintToString());
-        assertEq(string("99999"), 99999.uintToString());
+        assertEq(string("123456789"), uint256(123456789).toString());
+        assertEq(string("0"), uint256(0).toString());
+        assertEq(string("11111"), uint256(11111).toString());
+        assertEq(string("99999"), uint256(99999).toString());
         assertEq(
             string("123456789123456789123456789123456789123456789123456789"),
-            123456789123456789123456789123456789123456789123456789.uintToString()
+            uint256(123456789123456789123456789123456789123456789123456789).toString()
         );
         assertEq(
             string("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
-            (type(uint256).max).uintToString()
+            (type(uint256).max).toString()
         );
     }
 

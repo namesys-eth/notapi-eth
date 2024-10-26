@@ -6,31 +6,34 @@ pragma solidity >0.8.0 <0.9.0;
  * @dev A library for generating various data formats and handling ERC20/ERC721 token interactions.
  */
 import "./Interface.sol";
-import "./Utils.sol";
+import "./LibString.sol"; // Updated to use LibString
 import "./CIDv1.sol";
 
 library Generator {
     using CIDv1 for bytes;
-    using Utils for *;
+    using LibString for *; // Updated to use LibString
+
     /**
      * @dev Returns an error message in JSON format.
      * @param _err error message.
      * @param _data Additional data related to the error.
      * @return A bytes representation of the error message.
      */
-
     function toError(string memory _err, bytes memory _data) internal view returns (bytes memory) {
         return abi.encodePacked(
             '{"ok":false,"time":',
-            (block.timestamp).uintToString(),
+            (block.timestamp).toString(),
             ',"block":',
-            block.number.uintToString(),
+            block.number.toString(),
             ',"error":"',
             _err,
             '","data":"',
-            _data.bytesToHexString(),
+            _data.toHexString(),
             '"}'
-        ).toJSONCIDv1();
+        ) // Updated to use LibString
+                // Updated to use LibString
+                // Updated to use LibString
+            .toJSONCIDv1();
     }
 
     /**
@@ -41,13 +44,15 @@ library Generator {
     function toError(string memory _err) internal view returns (bytes memory) {
         return abi.encodePacked(
             '{"ok":false,"time":',
-            (block.timestamp).uintToString(),
+            (block.timestamp).toString(),
             ',"block":',
-            block.number.uintToString(),
+            block.number.toString(),
             ',"error":"',
             _err,
             '","data":""}'
-        ).toJSONCIDv1();
+        ) // Updated to use LibString
+                // Updated to use LibString
+            .toJSONCIDv1();
     }
 
     /**
@@ -58,13 +63,15 @@ library Generator {
     function toJSON(bytes memory _json) internal view returns (bytes memory) {
         return abi.encodePacked(
             string('{"ok":true,"time":'),
-            (block.timestamp).uintToString(),
+            (block.timestamp).toString(),
             ',"block":',
-            (block.number).uintToString(),
+            (block.number).toString(),
             ',"result":{',
             _json,
             "}}"
-        ).toJSONCIDv1();
+        ) // Updated to use LibString
+                // Updated to use LibString
+            .toJSONCIDv1();
     }
 
     /**
@@ -122,17 +129,17 @@ library Generator {
         iERC20 _erc20 = iERC20(_contract);
         return string.concat(
             '"erc":20,"balance":"',
-            (_erc20.balanceOf(_addr)).uintToString(),
+            (_erc20.balanceOf(_addr)).toString(), // Updated to use LibString
             '","address":"',
-            address(_erc20).toChecksumAddress(),
+            address(_erc20).toHexStringChecksummed(), // Ensure this is correct
             '","supply":"',
-            (_erc20.totalSupply()).uintToString(),
+            (_erc20.totalSupply()).toString(), // Updated to use LibString
             '","decimal":',
-            (_erc20.decimals()).uintToString(),
+            (_erc20.decimals()).toString(), // Updated to use LibString
             ',"symbol":"',
             _erc20.symbol(),
             '","contract":"',
-            address(_contract).toChecksumAddress(),
+            address(_contract).toHexStringChecksummed(), // Ensure this is correct
             '"'
         );
     }
@@ -146,13 +153,13 @@ library Generator {
         iERC20 _erc20 = iERC20(_contract);
         return abi.encodePacked(
             '"contract":"',
-            _contract.toChecksumAddress(),
+            _contract.toHexStringChecksummed(),
             '","decimals":',
-            _erc20.decimals().uintToString(),
+            _erc20.decimals().toString(), // Updated to use LibString
             ',"erc":20,"name":"',
             _erc20.name(),
             '","supply":"',
-            _erc20.totalSupply().uintToString(),
+            _erc20.totalSupply().toString(), // Updated to use LibString
             '","symbol":"',
             _erc20.symbol(),
             '"'
@@ -170,11 +177,11 @@ library Generator {
         address _owner = _erc721.ownerOf(_id);
         return string.concat(
             '"id":"',
-            _id.uintToString(),
+            _id.toString(), // Updated to use LibString
             '","address":"',
-            _owner.toChecksumAddress(),
+            _owner.toHexStringChecksummed(),
             '","balance":"',
-            _erc721.balanceOf(_owner).uintToString(),
+            _erc721.balanceOf(_owner).toString(), // Updated to use LibString
             '","metadata":"',
             '"'
         );
@@ -189,12 +196,12 @@ library Generator {
         iERC721 _erc721 = iERC721(_contract);
         return abi.encodePacked(
             '"contract":"',
-            _contract.toChecksumAddress(),
+            _contract.toHexStringChecksummed(),
             '"erc":721,"name":"',
             _erc721.name(),
             '","supply":',
             getSupply(_contract),
-            '","symbol":"',
+            ',"symbol":"',
             _erc721.symbol()
         );
     }
@@ -208,15 +215,15 @@ library Generator {
     function erc721Balance(address _contract, address _owner) internal view returns (string memory) {
         iERC721 _erc721 = iERC721(_contract);
         return string.concat(
-            '"address":"',
-            _owner.toChecksumAddress(),
-            '","balance":"',
-            _erc721.balanceOf(_owner).uintToString(),
-            '","contract":"',
-            _contract.toChecksumAddress(),
-            '","erc":721,"supply":',
-            getSupply(_contract),
-            ',"symbol":"',
+            '"a":"',
+            _owner.toHexStringChecksummed(),
+            '","b":"',
+            _erc721.balanceOf(_owner).toString(), // Updated to use LibString
+            '","c":"',
+            _contract.toHexStringChecksummed(),
+            '","e":721,"t":"',
+            getSupply(_contract).toString(), // Updated to use LibString
+            '","s":"',
             _erc721.symbol(),
             '"'
         );
@@ -254,22 +261,22 @@ library Generator {
      * @param _addr address of the ERC20 contract.
      * @return A string representation of the total supply.
      */
-    function getSupply(address _addr) internal view returns (string memory) {
+    function getSupply(address _addr) internal view returns (uint256) {
         try iERC20(_addr).totalSupply() returns (uint256 _supply) {
-            return _supply.uintToString();
+            return _supply;
         } catch {
-            return "N/A";
+            return 0;
         }
     }
 
     /**
      * @dev Checks if an ERC721 token exists for a given ID and address.
      * @param id ID of the token.
-     * @param _addr address of the ERC721 contract.
+     * @param _erc721 address of the ERC721 contract.
      * @return owner of the token if it exists, otherwise address(0).
      */
-    function idCheck721(uint256 id, address _addr) internal view returns (address) {
-        try iERC721(_addr).ownerOf(id) returns (address _owner) {
+    function idCheck721(address _erc721, uint256 id) internal view returns (address) {
+        try iERC721(_erc721).ownerOf(id) returns (address _owner) {
             return _owner;
         } catch {
             return address(0);
@@ -289,10 +296,44 @@ library Generator {
             if (
                 _res.length > 0 && keccak256(abi.encodePacked(bytes32(_res))) != keccak256(abi.encodePacked(bytes32(0)))
             ) {
-                _res = bytes(string.concat('"data":"', _res.bytesToHexString(), '"'));
+                _res = bytes(string.concat('"data":"', _res.toHexString(), '"'));
             } else {
                 ok = false;
             }
         }
+    }
+
+    function getFeatured20(iERC20 erc20, uint256 balance) public view returns (bytes memory) {
+        return abi.encodePacked(
+            '"',
+            erc20.symbol(),
+            '":["',
+            balance.toString(), // Updated to use LibString
+            '","',
+            address(erc20).toHexStringChecksummed(), // Ensure this is correct
+            '","',
+            erc20.decimals().toString(), // Updated to use LibString
+            '","',
+            erc20.totalSupply().toString(), // Updated to use LibString
+            '"]'
+        );
+    }
+
+    function getFeatured721(iERC721 erc721, uint256 balance) public view returns (bytes memory) {
+        return abi.encodePacked(
+            '"',
+            erc721.symbol(),
+            '":["',
+            balance.toString(), // Updated to use LibString
+            '","',
+            address(erc721).toHexStringChecksummed(), // Ensure this is correct
+            '","',
+            iERC165(address(erc721)).supportsInterface(iERC2981.royaltyInfo.selector) ? "true" : "false",
+            '","',
+            erc721.totalSupply().toString(), // Updated to use LibString
+            '","',
+            iERC7572(address(erc721)).contractURI(), // TODO: use try catch for this
+            '"]'
+        );
     }
 }
